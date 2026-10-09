@@ -1,11 +1,13 @@
 # abuse-wasm
 
+### ▶ [Play Abuse in your browser](https://aarontrank.com/abuse/)
+
 **Abuse** (Crack dot Com, 1995), compiled to WebAssembly so it runs in a browser tab. This is
 a port, not an emulator: the Abuse 0.8 SDL source tree is compiled with
 [Emscripten](https://emscripten.org/), using Emscripten's built-in JavaScript implementation of
 SDL 1.2 and SDL_mixer (`-sUSE_SDL=1`) and **Asyncify**. Asyncify lets the game keep its own
 blocking loops (main loop, menus, dialogs) and yield to the browser inside them, so the game's
-code did not have to be restructured around a browser frame callback. The directory holds only
+code did not have to be restructured around a browser frame callback. The repo holds only
 the build tooling, a few small source patches and the page. You supply the source tarball.
 
 ## Prerequisites
