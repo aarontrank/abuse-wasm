@@ -1,0 +1,179 @@
+--- a/src/lisp/lisp.cpp
++++ b/src/lisp/lisp.cpp
+@@ -3139,11 +3139,11 @@
+     LSymbol::root = NULL;
+     total_user_functions = 0;
+ 
+-    free_space[0] = space[0] = (uint8_t *)malloc(0x1000);
+-    space_size[0] = 0x1000;
++    free_space[0] = space[0] = (uint8_t *)malloc(0x800000);
++    space_size[0] = 0x800000;
+ 
+-    free_space[1] = space[1] = (uint8_t *)malloc(0x1000);
+-    space_size[1] = 0x1000;
++    free_space[1] = space[1] = (uint8_t *)malloc(0x800000);
++    space_size[1] = 0x800000;
+ 
+     current_space = PERM_SPACE;
+ 
+--- a/src/lol/timer.cpp
++++ b/src/lol/timer.cpp
+@@ -14,8 +14,11 @@
+ 
+ #include <cstdlib>
+ #include <stdint.h>
++#if defined __EMSCRIPTEN__
++#   include <emscripten.h>
++#endif
+ 
+-#if defined __linux__ || defined __APPLE__
++#if defined __linux__ || defined __APPLE__ || defined __EMSCRIPTEN__
+ #   include <sys/time.h>
+ #   include <unistd.h>
+ #elif defined _WIN32
+@@ -45,7 +48,7 @@
+ private:
+     TimerData()
+     {
+-#if defined __linux__ || defined __APPLE__
++#if defined __linux__ || defined __APPLE__ || defined __EMSCRIPTEN__
+         gettimeofday(&tv0, NULL);
+ #elif defined _WIN32
+         QueryPerformanceCounter(&cycles0);
+@@ -60,7 +63,7 @@
+     float GetOrWait(float deltams, bool update)
+     {
+         float ret, towait;
+-#if defined __linux__ || defined __APPLE__
++#if defined __linux__ || defined __APPLE__ || defined __EMSCRIPTEN__
+         struct timeval tv;
+         gettimeofday(&tv, NULL);
+         ret = 1e-3f * (tv.tv_usec - tv0.tv_usec)
+@@ -69,7 +72,11 @@
+             tv0 = tv;
+         towait = deltams - ret;
+         if (towait > 0.0f)
+-            usleep((int)(towait * 1e3f));
++#if defined __EMSCRIPTEN__
++            emscripten_sleep((int)(towait + 0.5f));
++#else
++            usleep((int)(towait * 1e3f));
++#endif
+ #elif defined _WIN32
+         LARGE_INTEGER cycles;
+         QueryPerformanceCounter(&cycles);
+@@ -105,7 +112,7 @@
+ 
+     static float GetMsPerCycle()
+     {
+-#if defined __linux__ || defined __APPLE__
++#if defined __linux__ || defined __APPLE__ || defined __EMSCRIPTEN__
+         return 1.0f;
+ #elif defined _WIN32
+         LARGE_INTEGER tmp;
+@@ -118,7 +125,7 @@
+ #endif
+     }
+ 
+-#if defined __linux__ || defined __APPLE__
++#if defined __linux__ || defined __APPLE__ || defined __EMSCRIPTEN__
+     struct timeval tv0;
+ #elif defined _WIN32
+     LARGE_INTEGER cycles0;
+--- a/src/sdlport/event.cpp
++++ b/src/sdlport/event.cpp
+@@ -54,7 +54,9 @@
+     ewaiting = 0;
+ 
+     // Ignore activate events
++#ifndef __EMSCRIPTEN__
+     SDL_EventState( SDL_ACTIVEEVENT, SDL_IGNORE );
++#endif
+ }
+ 
+ //
+--- a/src/sdlport/sound.cpp
++++ b/src/sdlport/sound.cpp
+@@ -73,9 +73,15 @@
+ 
+     Mix_AllocateChannels(50);
+ 
++#ifdef __EMSCRIPTEN__
++    audioObtained.freq = 44100;
++    audioObtained.format = AUDIO_S16SYS;
++    audioObtained.channels = 2;
++#else
+     int tempChannels = 0;
+     Mix_QuerySpec(&audioObtained.freq, &audioObtained.format, &tempChannels);
+     audioObtained.channels = tempChannels & 0xFF;
++#endif
+ 
+     sound_enabled = SFX_INITIALIZED | MUSIC_INITIALIZED;
+ 
+@@ -135,9 +141,13 @@
+     // Therefore with SDL_mixer, a sound that has not finished playing
+     // on a level load will cut off in the middle. This is most noticable
+     // for the button sound of the load savegame dialog.
++#ifdef __EMSCRIPTEN__
++    Mix_HaltChannel(-1);
++#else
+     Mix_FadeOutGroup(-1, 100);
+     while (Mix_Playing(-1))
+         SDL_Delay(10);
++#endif
+     Mix_FreeChunk(m_chunk);
+ }
+ 
+--- a/src/sdlport/video.cpp
++++ b/src/sdlport/video.cpp
+@@ -23,6 +23,9 @@
+ #endif
+ 
+ #include <SDL.h>
++#ifdef __EMSCRIPTEN__
++#   include <emscripten.h>
++#endif
+ 
+ #ifdef HAVE_OPENGL
+ #   ifdef __APPLE__
+@@ -113,6 +116,10 @@
+     // Set the icon for this window.  Looks nice on taskbars etc.
+     SDL_WM_SetIcon(SDL_LoadBMP("abuse.bmp"), NULL);
+ 
++#ifdef __EMSCRIPTEN__
++    // The default copy-back-on-lock aborts on an SDL_HWPALETTE screen.
++    EM_ASM({ SDL.defaults.discardOnLock = true; SDL.defaults.opaqueFrontBuffer = false; });
++#endif
+     // Create the window with a preference for 8-bit (palette animations!), but accept any depth */
+     window = SDL_SetVideoMode(flags.xres, flags.yres, 8, vidFlags | SDL_ANYFORMAT);
+     if(window == NULL)
+@@ -184,7 +191,12 @@
+     }
+ 
+     // Create our 8-bit surface
++#ifdef __EMSCRIPTEN__
++    // Without SDL_HWPALETTE, Emscripten's SDL gives the surface 4 bytes/pixel.
++    surface = SDL_CreateRGBSurface(SDL_SWSURFACE | SDL_HWPALETTE, window->w, window->h, 8, 0xff, 0xff, 0xff, 0xff);
++#else
+     surface = SDL_CreateRGBSurface(SDL_SWSURFACE, window->w, window->h, 8, 0xff, 0xff, 0xff, 0xff);
++#endif
+     if(surface == NULL)
+     {
+         // Our surface is no good, we have to bail.
+@@ -415,6 +427,16 @@
+     if (flags.gl)
+         return;
+ 
++#ifdef __EMSCRIPTEN__
++    // Emscripten's SDL repaints the 8-bit window canvas from the window's own
++    // pixel buffer on unlock, discarding anything blitted onto it.
++    SDL_LockSurface(window);
++    for (int y = 0; y < surface->h; y++)
++        memcpy((Uint8 *)window->pixels + y * window->pitch,
++               (Uint8 *)surface->pixels + y * surface->pitch, surface->w);
++    SDL_UnlockSurface(window);
++    return;
++#endif
+     SDL_BlitSurface(surface, rect, window, rect);
+ 
+     // no window update needed until end of run

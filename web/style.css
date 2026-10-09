@@ -1,0 +1,42 @@
+:root { color-scheme: dark; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #000; color: #ccc; font: 14px/1.4 system-ui, sans-serif; }
+#stage { display: flex; flex-direction: column; height: 100%; background: #000; }
+
+/* The canvas box itself must have the game's aspect ratio: Emscripten maps
+   mouse positions through canvas.getBoundingClientRect(), so letterboxing
+   inside the element (object-fit) would skew every click. --ar is set from
+   the canvas's own width/height by index.html. */
+#screen {
+  --ar: 1.6;
+  position: relative; flex: 1; min-height: 0;
+  display: flex; align-items: center; justify-content: center;
+  container-type: size;
+}
+#canvas {
+  display: block; border: 0; padding: 0; outline: none;
+  width: min(100cqw, 100cqh * var(--ar));
+  height: min(100cqh, 100cqw / var(--ar));
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+  cursor: none; /* the game draws its own pointer and crosshair */
+}
+
+.overlay {
+  position: absolute; inset: 0; margin: 0; box-sizing: border-box;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  background: rgba(0, 0, 0, 0.85); color: #eee; border: 0; font: inherit; text-align: center;
+}
+.overlay[hidden] { display: none; }
+#start { font-size: 28px; cursor: pointer; color: #f84; }
+#start:disabled { cursor: progress; color: #aaa; }
+.small { font-size: 14px; color: #999; }
+.error { background: rgba(60, 0, 0, 0.94); padding: 16px; }
+.error pre { max-width: 100%; max-height: 60%; overflow: auto; white-space: pre-wrap; text-align: left; color: #fcc; }
+
+footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 8px; color: #999; }
+#stage:fullscreen footer { display: none; }
+#status { min-height: 1.4em; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+button:not(.overlay) {
+  padding: 4px 12px; border: 1px solid #666; border-radius: 4px;
+  background: #222; color: #eee; cursor: pointer; font: inherit;
+}

@@ -1,0 +1,122 @@
+--- a/src/sdlport/sound.cpp
++++ b/src/sdlport/sound.cpp
+@@ -22,10 +22,14 @@
+ #   include "config.h"
+ #endif
+ 
++#include <cmath>
+ #include <cstring>
+ 
+ #include <SDL.h>
+ #include <SDL/SDL_mixer.h>
++#ifdef __EMSCRIPTEN__
++#   include <emscripten.h>
++#endif
+ 
+ #include "sound.h"
+ #include "hmi.h"
+@@ -83,9 +87,15 @@
+     audioObtained.channels = tempChannels & 0xFF;
+ #endif
+ 
++#ifdef __EMSCRIPTEN__
++    // Music is HMI converted to MIDI, which browsers cannot decode.
++    sound_enabled = SFX_INITIALIZED;
++    printf( "Sound: Enabled (music unavailable in the browser)\n" );
++#else
+     sound_enabled = SFX_INITIALIZED | MUSIC_INITIALIZED;
+ 
+     printf( "Sound: Enabled\n" );
++#endif
+ 
+     // It's all good
+     return sound_enabled;
+@@ -165,11 +175,31 @@
+     if (!sound_enabled)
+         return;
+ 
++#ifdef __EMSCRIPTEN__
++    // A suspended AudioContext never ends a source, so every sound started
++    // before the first user gesture would hold a channel and then all play at
++    // once on resume.
++    if (!EM_ASM_INT({ return SDL.audioContext && SDL.audioContext.state == 'running'; }))
++        return;
++#endif
++
+     int channel = Mix_PlayChannel(-1, m_chunk, 0);
+     if (channel > -1)
+     {
+         Mix_Volume(channel, volume);
++#ifdef __EMSCRIPTEN__
++        // Emscripten's Mix_SetPanning places a PannerNode at
++        // x = (right - left) / 255, z = 0.1, so the angle grows with
++        // atan(10 x) and a small offset already pans hard. Pick the x whose
++        // equal-power angle gives the share of right output panpot asks for.
++        double angle = ((255 - panpot) / 255.0 - 0.5) * M_PI;
++        // Clamp before the cast: tan() is ~1.6e16 at panpot 0 and 255.
++        double x = 255 * 0.1 * tan(angle);
++        int d = (int)lround(x < -255 ? -255 : x > 255 ? 255 : x);
++        Mix_SetPanning(channel, (255 - d) / 2, (255 - d) / 2 + d);
++#else
+         Mix_SetPanning(channel, panpot, 255 - panpot);
++#endif
+     }
+ }
+ 
+@@ -189,6 +219,10 @@
+     strcpy(realname, get_filename_prefix());
+     strcat(realname, filename);
+ 
++#ifdef __EMSCRIPTEN__
++    return;
++#endif
++
+     uint32_t data_size;
+     data = load_hmi(realname, data_size);
+ 
+@@ -216,14 +250,20 @@
+     free(data);
+     free(Name);
+ 
+-    Mix_FreeMusic(music);
+-    SDL_FreeRW(rw);
++    // In Emscripten's mixer handles are indices, so freeing NULL frees the
++    // sound effect with index 0.
++    if (music)
++        Mix_FreeMusic(music);
++    if (rw)
++        SDL_FreeRW(rw);
+ }
+ 
+ void song::play( unsigned char volume )
+ {
+     song_id = 1;
+ 
++    if (!music)
++        return;
+     Mix_PlayMusic(this->music, 0);
+     Mix_VolumeMusic(volume);
+ }
+@@ -232,16 +272,20 @@
+ {
+     song_id = 0;
+ 
+-    Mix_FadeOutMusic(100);
++    if (music)
++        Mix_FadeOutMusic(100);
+ }
+ 
+ int song::playing()
+ {
++    if (!music)
++        return 0;
+     return Mix_PlayingMusic();
+ }
+ 
+ void song::set_volume( int volume )
+ {
+-    Mix_VolumeMusic(volume);
++    if (music)
++        Mix_VolumeMusic(volume);
+ }
+ 

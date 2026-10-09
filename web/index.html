@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Abuse — in your browser</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="stage">
+    <div id="screen">
+      <canvas id="canvas" width="640" height="400" tabindex="-1"></canvas>
+      <button id="start" class="overlay" type="button" disabled>
+        <span id="start-label">Loading…</span>
+        <span id="progress" class="small" aria-live="polite"></span>
+      </button>
+      <div id="error" class="overlay error" role="alert" hidden>
+        <p><strong id="error-title">The game stopped</strong></p>
+        <pre id="error-text"></pre>
+        <button type="button" onclick="location.reload()">Reload</button>
+      </div>
+    </div>
+    <footer>
+      <span id="status" aria-live="polite"></span>
+      <button id="fullscreen" type="button">Fullscreen</button>
+    </footer>
+  </main>
+  <script>
+    (function () {
+      var canvas = document.getElementById('canvas');
+      var box = document.getElementById('screen');
+      var start = document.getElementById('start');
+      var progress = document.getElementById('progress');
+      var status = document.getElementById('status');
+      var errorPanel = document.getElementById('error');
+      var recentErr = [];
+
+      // style.css sizes the canvas from --ar, so the page follows whatever
+      // resolution the game asks SDL for.
+      function syncAspect() { box.style.setProperty('--ar', canvas.width / canvas.height); }
+      new MutationObserver(syncAspect).observe(canvas, { attributes: true, attributeFilter: ['width', 'height'] });
+      syncAspect();
+
+      function stopped(title, detail) {
+        if (!errorPanel.hidden) return;
+        document.getElementById('error-title').textContent = title;
+        document.getElementById('error-text').textContent =
+          [detail].concat(recentErr).filter(Boolean).join('\n');
+        errorPanel.hidden = false;
+        start.hidden = true;
+      }
+
+      window.Module = {
+        canvas: canvas,
+        print: function (t) { console.log(t); },
+        printErr: function (t) {
+          console.error(t);
+          recentErr.push(t);
+          if (recentErr.length > 8) recentErr.shift();
+        },
+        // Emscripten reports "Downloading data... (x/y)" while fetching
+        // abuse.data and "Running..." once every run dependency has resolved,
+        // immediately before main() starts.
+        setStatus: function (t) {
+          if (t === 'Running...' && errorPanel.hidden) {
+            start.disabled = false;
+            document.getElementById('start-label').textContent = 'Click to start';
+          }
+          var m = /\((\d+)\/(\d+)\)$/.exec(t);
+          progress.textContent = m && +m[2] ? t.replace(m[0], '') + Math.floor(100 * m[1] / m[2]) + '%' : t;
+          status.textContent = t;
+        },
+        onAbort: function (what) { stopped('The game crashed', 'Aborted: ' + what); },
+        onExit: function (code) { stopped('The game exited', 'Exit status ' + code); },
+      };
+
+      function thrown(r) {
+        if (r === 'unwind') return; // Emscripten's normal unwinding, not an error
+        if (r && r.name === 'ExitStatus') return stopped('The game exited', r.message);
+        stopped('The game crashed', (r && r.stack) || String(r));
+      }
+      // Capture phase: a failed <script> load does not bubble to window.
+      window.addEventListener('error', function (e) {
+        var t = e.target;
+        if (t && t !== window && (t.src || t.href)) return stopped('The game could not load', 'Failed to load ' + (t.src || t.href));
+        thrown(e.error || e.message);
+      }, true);
+      window.addEventListener('unhandledrejection', function (e) {
+        var r = e.reason;
+        // A rejected Web API call (audio decode, fullscreen, ...) is not a crash.
+        if (r instanceof DOMException) { console.warn(r); return; }
+        thrown(r);
+      });
+
+      start.addEventListener('click', function () {
+        canvas.focus();
+        try { window.abuseUnlockAudio?.(); } catch (e) { console.error(e); }
+        start.hidden = true;
+      });
+
+      document.getElementById('fullscreen').addEventListener('click', function () {
+        var req = document.fullscreenElement ? document.exitFullscreen() : document.getElementById('stage').requestFullscreen();
+        req.catch(function (e) { console.error(e); });
+        canvas.focus();
+      });
+
+      // SDL swallows keys once the game has initialised it; this also covers
+      // the loading screen, so arrows and space never scroll the page.
+      var scrollKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End', ' '];
+      window.addEventListener('keydown', function (e) {
+        if (scrollKeys.indexOf(e.key) >= 0 && !(e.target instanceof HTMLButtonElement)) e.preventDefault();
+      }, true);
+      canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    })();
+  </script>
+  <script async src="abuse.js"></script>
+</body>
+</html>

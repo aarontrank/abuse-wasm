@@ -1,0 +1,10 @@
+--- a/src/sdlport/setup.cpp
++++ b/src/sdlport/setup.cpp
+@@ -368,6 +368,7 @@
+     keys.down                = key_value( "DOWN" );
+     keys.left                = key_value( "LEFT" );
+     keys.right                = key_value( "RIGHT" );
++    keys.b2                    = key_value( "SPACE" );
+     keys.b3                    = key_value( "CTRL_R" );
+     keys.b4                    = key_value( "INSERT" );
+     scale                    = 2;            // Default scale amount

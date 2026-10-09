@@ -1,0 +1,2 @@
+# Patches carry CRLF lines from the original sources; never normalise them.
+*.patch -text

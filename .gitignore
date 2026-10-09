@@ -1,0 +1,19 @@
+# Build output: the extracted, patched tarball and the packed game
+build/
+dist/
+
+# Game source tarball, which you supply yourself
+*.tar.gz
+*.tgz
+
+# Smoke-test dependencies and Playwright output
+node_modules/
+test-results/
+playwright-report/
+
+# Editor and OS cruft
+.DS_Store
+*.swp
+*~
+.vscode/
+.idea/
