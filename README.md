@@ -25,14 +25,14 @@ the build tooling, a few small source patches and the page. You supply the sourc
     `~/emsdk/.emscripten` to a system `node`.
 - `python3`, to serve the page.
 - A current desktop browser (WebAssembly, Web Audio, IndexedDB).
-- The Abuse 0.8 source tarball, `abuse-0.8.tar.gz`, from
-  <http://abuse.zoy.org/raw-attachment/wiki/download/abuse-0.8.tar.gz>. It contains both the
-  source and the game data.
+- The Abuse 0.8 source tarball, `abuse-0.8.tar.gz`, from the
+  [0.8 GitHub release](https://github.com/darealshinji/abuse-game/releases/tag/0.8). The release
+  mirrors the original tarball and contains both the source and game data.
 
 ## Quick start
 
 ```bash
-curl -LO http://abuse.zoy.org/raw-attachment/wiki/download/abuse-0.8.tar.gz
+curl -fL -o abuse-0.8.tar.gz https://github.com/darealshinji/abuse-game/releases/download/0.8/abuse-0.8.tar.gz
 ./build.sh abuse-0.8.tar.gz
 ./serve.sh            # http://localhost:8080/  (./serve.sh 9000 for another port)
 ```
